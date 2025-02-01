@@ -3,7 +3,7 @@ package cli
 import (
 	flag "github.com/spf13/pflag"
 
-	"cosmossdk.io/x/staking/types"
+	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
 const (
@@ -15,20 +15,16 @@ const (
 	FlagSharesAmount        = "shares-amount"
 	FlagSharesFraction      = "shares-fraction"
 
-	FlagMoniker                  = "moniker"
-	FlagEditMoniker              = "new-moniker"
-	FlagIdentity                 = "identity"
-	FlagWebsite                  = "website"
-	FlagSecurityContact          = "security-contact"
-	FlagDetails                  = "details"
-	FlagMetadataProfilePicUri    = "metadata-profile-pic-uri"
-	FlagMetadataSocialHandleUris = "metadata-social-handle-uris"
+	FlagMoniker         = "moniker"
+	FlagEditMoniker     = "new-moniker"
+	FlagIdentity        = "identity"
+	FlagWebsite         = "website"
+	FlagSecurityContact = "security-contact"
+	FlagDetails         = "details"
 
 	FlagCommissionRate          = "commission-rate"
 	FlagCommissionMaxRate       = "commission-max-rate"
 	FlagCommissionMaxChangeRate = "commission-max-change-rate"
-
-	FlagMinSelfDelegation = "min-self-delegation"
 
 	FlagGenesisFormat = "genesis-format"
 	FlagNodeID        = "node-id"
@@ -62,13 +58,6 @@ func FlagSetCommissionCreate() *flag.FlagSet {
 	return fs
 }
 
-// FlagSetMinSelfDelegation Returns the FlagSet used for minimum set delegation.
-func FlagSetMinSelfDelegation() *flag.FlagSet {
-	fs := flag.NewFlagSet("", flag.ContinueOnError)
-	fs.String(FlagMinSelfDelegation, "", "The minimum self delegation required on the validator")
-	return fs
-}
-
 // FlagSetAmount Returns the FlagSet for amount related operations.
 func FlagSetAmount() *flag.FlagSet {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
@@ -91,8 +80,6 @@ func flagSetDescriptionEdit() *flag.FlagSet {
 	fs.String(FlagWebsite, types.DoNotModifyDesc, "The validator's (optional) website")
 	fs.String(FlagSecurityContact, types.DoNotModifyDesc, "The validator's (optional) security contact email")
 	fs.String(FlagDetails, types.DoNotModifyDesc, "The validator's (optional) details")
-	fs.String(FlagMetadataProfilePicUri, "", "The  validator's profile pic uri")
-	fs.StringArray(FlagMetadataSocialHandleUris, []string{}, "The  validator's social handles uris")
 
 	return fs
 }

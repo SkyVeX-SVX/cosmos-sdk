@@ -3,10 +3,9 @@ package ormdb
 import (
 	"context"
 	"fmt"
-	"maps"
-	"slices"
 	"sort"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"cosmossdk.io/core/appmodule"
@@ -23,7 +22,7 @@ func (m appModuleGenesisWrapper) IsOnePerModuleType() {}
 func (m appModuleGenesisWrapper) IsAppModule() {}
 
 func (m appModuleGenesisWrapper) DefaultGenesis(target appmodule.GenesisTarget) error {
-	tableNames := slices.Collect(maps.Keys(m.tablesByName))
+	tableNames := maps.Keys(m.tablesByName)
 	sort.Slice(tableNames, func(i, j int) bool {
 		ti, tj := tableNames[i], tableNames[j]
 		return ti.Name() < tj.Name()
@@ -51,7 +50,7 @@ func (m appModuleGenesisWrapper) DefaultGenesis(target appmodule.GenesisTarget) 
 
 func (m appModuleGenesisWrapper) ValidateGenesis(source appmodule.GenesisSource) error {
 	errMap := map[protoreflect.FullName]error{}
-	names := slices.Collect(maps.Keys(m.tablesByName))
+	names := maps.Keys(m.tablesByName)
 	sort.Slice(names, func(i, j int) bool {
 		ti, tj := names[i], names[j]
 		return ti.Name() < tj.Name()
@@ -125,7 +124,7 @@ func (m appModuleGenesisWrapper) InitGenesis(ctx context.Context, source appmodu
 
 func (m appModuleGenesisWrapper) ExportGenesis(ctx context.Context, sink appmodule.GenesisTarget) error {
 	// Ensure that we export the tables in a deterministic order.
-	tableNames := slices.Collect(maps.Keys(m.tablesByName))
+	tableNames := maps.Keys(m.tablesByName)
 	sort.Slice(tableNames, func(i, j int) bool {
 		ti, tj := tableNames[i], tableNames[j]
 		return ti.Name() < tj.Name()

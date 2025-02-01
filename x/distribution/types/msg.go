@@ -11,14 +11,15 @@ var (
 	_ sdk.Msg = (*MsgWithdrawValidatorCommission)(nil)
 	_ sdk.Msg = (*MsgUpdateParams)(nil)
 	_ sdk.Msg = (*MsgCommunityPoolSpend)(nil)
-	_ sdk.Msg = (*MsgFundCommunityPool)(nil)
 	_ sdk.Msg = (*MsgDepositValidatorRewardsPool)(nil)
+	_ sdk.Msg = (*MsgWithdrawTokenizeShareRecordReward)(nil)
+	_ sdk.Msg = (*MsgWithdrawAllTokenizeShareRecordReward)(nil)
 )
 
-func NewMsgSetWithdrawAddress(delAddr, withdrawAddr string) *MsgSetWithdrawAddress {
+func NewMsgSetWithdrawAddress(delAddr, withdrawAddr sdk.AccAddress) *MsgSetWithdrawAddress {
 	return &MsgSetWithdrawAddress{
-		DelegatorAddress: delAddr,
-		WithdrawAddress:  withdrawAddr,
+		DelegatorAddress: delAddr.String(),
+		WithdrawAddress:  withdrawAddr.String(),
 	}
 }
 
@@ -51,5 +52,18 @@ func NewMsgDepositValidatorRewardsPool(depositor, valAddr string, amount sdk.Coi
 		Amount:           amount,
 		Depositor:        depositor,
 		ValidatorAddress: valAddr,
+	}
+}
+
+func NewMsgWithdrawTokenizeShareRecordReward(ownerAddr string, recordID uint64) *MsgWithdrawTokenizeShareRecordReward {
+	return &MsgWithdrawTokenizeShareRecordReward{
+		OwnerAddress: ownerAddr,
+		RecordId:     recordID,
+	}
+}
+
+func NewMsgWithdrawAllTokenizeShareRecordReward(ownerAddr string) *MsgWithdrawAllTokenizeShareRecordReward {
+	return &MsgWithdrawAllTokenizeShareRecordReward{
+		OwnerAddress: ownerAddr,
 	}
 }

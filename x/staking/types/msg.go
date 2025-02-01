@@ -1,10 +1,7 @@
 package types
 
 import (
-	gogoprotoany "github.com/cosmos/gogoproto/types/any"
-
 	"cosmossdk.io/core/address"
-	coretransaction "cosmossdk.io/core/transaction"
 	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/math"
 
@@ -15,21 +12,28 @@ import (
 )
 
 var (
-	_ coretransaction.Msg                  = &MsgCreateValidator{}
-	_ gogoprotoany.UnpackInterfacesMessage = (*MsgCreateValidator)(nil)
-	_ coretransaction.Msg                  = &MsgEditValidator{}
-	_ coretransaction.Msg                  = &MsgDelegate{}
-	_ coretransaction.Msg                  = &MsgUndelegate{}
-	_ coretransaction.Msg                  = &MsgBeginRedelegate{}
-	_ coretransaction.Msg                  = &MsgCancelUnbondingDelegation{}
-	_ coretransaction.Msg                  = &MsgUpdateParams{}
+	_ sdk.Msg                            = &MsgCreateValidator{}
+	_ codectypes.UnpackInterfacesMessage = (*MsgCreateValidator)(nil)
+	_ sdk.Msg                            = &MsgEditValidator{}
+	_ sdk.Msg                            = &MsgDelegate{}
+	_ sdk.Msg                            = &MsgUndelegate{}
+	_ sdk.Msg                            = &MsgUnbondValidator{}
+	_ sdk.Msg                            = &MsgBeginRedelegate{}
+	_ sdk.Msg                            = &MsgCancelUnbondingDelegation{}
+	_ sdk.Msg                            = &MsgUpdateParams{}
+	_ sdk.Msg                            = &MsgTokenizeShares{}
+	_ sdk.Msg                            = &MsgRedeemTokensForShares{}
+	_ sdk.Msg                            = &MsgTransferTokenizeShareRecord{}
+	_ sdk.Msg                            = &MsgDisableTokenizeShares{}
+	_ sdk.Msg                            = &MsgEnableTokenizeShares{}
+	_ sdk.Msg                            = &MsgValidatorBond{}
 )
 
 // NewMsgCreateValidator creates a new MsgCreateValidator instance.
 // Delegator address and validator address are the same.
 func NewMsgCreateValidator(
 	valAddr string, pubKey cryptotypes.PubKey,
-	selfDelegation sdk.Coin, description Description, commission CommissionRates, minSelfDelegation math.Int,
+	selfDelegation sdk.Coin, description Description, commission CommissionRates,
 ) (*MsgCreateValidator, error) {
 	var pkAny *codectypes.Any
 	if pubKey != nil {
@@ -39,12 +43,11 @@ func NewMsgCreateValidator(
 		}
 	}
 	return &MsgCreateValidator{
-		Description:       description,
-		ValidatorAddress:  valAddr,
-		Pubkey:            pkAny,
-		Value:             selfDelegation,
-		Commission:        commission,
-		MinSelfDelegation: minSelfDelegation,
+		Description:      description,
+		ValidatorAddress: valAddr,
+		Pubkey:           pkAny,
+		Value:            selfDelegation,
+		Commission:       commission,
 	}, nil
 }
 
@@ -64,7 +67,7 @@ func (msg MsgCreateValidator) Validate(ac address.Codec) error {
 		return errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "invalid delegation amount")
 	}
 
-	if msg.Description.IsEmpty() {
+	if msg.Description == (Description{}) {
 		return errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "empty description")
 	}
 
@@ -76,38 +79,21 @@ func (msg MsgCreateValidator) Validate(ac address.Codec) error {
 		return err
 	}
 
-	if !msg.MinSelfDelegation.IsPositive() {
-		return errorsmod.Wrap(
-			sdkerrors.ErrInvalidRequest,
-			"minimum self delegation must be a positive integer",
-		)
-	}
-
-	if msg.Value.Amount.LT(msg.MinSelfDelegation) {
-		return ErrSelfDelegationBelowMinimum
-	}
-
 	return nil
 }
 
-// GetMoniker returns the moniker of the validator
-func (msg MsgCreateValidator) GetMoniker() string {
-	return msg.Description.GetMoniker()
-}
-
 // UnpackInterfaces implements UnpackInterfacesMessage.UnpackInterfaces
-func (msg MsgCreateValidator) UnpackInterfaces(unpacker gogoprotoany.AnyUnpacker) error {
+func (msg MsgCreateValidator) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
 	var pubKey cryptotypes.PubKey
 	return unpacker.UnpackAny(msg.Pubkey, &pubKey)
 }
 
 // NewMsgEditValidator creates a new MsgEditValidator instance
-func NewMsgEditValidator(valAddr string, description Description, newRate *math.LegacyDec, newMinSelfDelegation *math.Int) *MsgEditValidator {
+func NewMsgEditValidator(valAddr string, description Description, newRate *math.LegacyDec) *MsgEditValidator {
 	return &MsgEditValidator{
-		Description:       description,
-		CommissionRate:    newRate,
-		ValidatorAddress:  valAddr,
-		MinSelfDelegation: newMinSelfDelegation,
+		Description:      description,
+		CommissionRate:   newRate,
+		ValidatorAddress: valAddr,
 	}
 }
 
@@ -151,34 +137,59 @@ func NewMsgCancelUnbondingDelegation(delAddr, valAddr string, creationHeight int
 	}
 }
 
-// NewMsgRotateConsPubKey creates a new MsgRotateConsPubKey instance.
-func NewMsgRotateConsPubKey(valAddr string, pubKey cryptotypes.PubKey) (*MsgRotateConsPubKey, error) {
-	var pkAny *codectypes.Any
-	if pubKey != nil {
-		var err error
-		if pkAny, err = codectypes.NewAnyWithValue(pubKey); err != nil {
-			return nil, err
-		}
+// NewMsgUnbondValidator creates a new MsgUnbondValidator instance.
+// Validator account address must be provided - do not use valoper address.
+func NewMsgUnbondValidator(valAccountAddr string) *MsgUnbondValidator {
+	return &MsgUnbondValidator{
+		ValidatorAddress: valAccountAddr,
 	}
-	return &MsgRotateConsPubKey{
+}
+
+// NewMsgTokenizeShares creates a new MsgTokenizeShares instance.
+func NewMsgTokenizeShares(delAddr, valAddr string, amount sdk.Coin, owner string) *MsgTokenizeShares {
+	return &MsgTokenizeShares{
+		DelegatorAddress:    delAddr,
+		ValidatorAddress:    valAddr,
+		Amount:              amount,
+		TokenizedShareOwner: owner,
+	}
+}
+
+// NewMsgRedeemTokensForShares creates a new MsgRedeemTokensForShares instance.
+func NewMsgRedeemTokensForShares(delAddr string, amount sdk.Coin) *MsgRedeemTokensForShares {
+	return &MsgRedeemTokensForShares{
+		DelegatorAddress: delAddr,
+		Amount:           amount,
+	}
+}
+
+// NewMsgTransferTokenizeShareRecord creates a new MsgTransferTokenizeShareRecord instance.
+func NewMsgTransferTokenizeShareRecord(recordID uint64, sender, newOwner string) *MsgTransferTokenizeShareRecord {
+	return &MsgTransferTokenizeShareRecord{
+		TokenizeShareRecordId: recordID,
+		Sender:                sender,
+		NewOwner:              newOwner,
+	}
+}
+
+// NewMsgDisableTokenizeShares creates a new MsgDisableTokenizeShares instance.
+func NewMsgDisableTokenizeShares(delAddr string) *MsgDisableTokenizeShares {
+	return &MsgDisableTokenizeShares{
+		DelegatorAddress: delAddr,
+	}
+}
+
+// NewMsgEnableTokenizeShares creates a new MsgEnableTokenizeShares instance.
+func NewMsgEnableTokenizeShares(delAddr string) *MsgEnableTokenizeShares {
+	return &MsgEnableTokenizeShares{
+		DelegatorAddress: delAddr,
+	}
+}
+
+// NewMsgValidatorBond creates a new MsgValidatorBond instance.
+func NewMsgValidatorBond(delAddr, valAddr string) *MsgValidatorBond {
+	return &MsgValidatorBond{
+		DelegatorAddress: delAddr,
 		ValidatorAddress: valAddr,
-		NewPubkey:        pkAny,
-	}, nil
-}
-
-// UnpackInterfaces implements UnpackInterfacesMessage.UnpackInterfaces
-func (msg MsgRotateConsPubKey) UnpackInterfaces(unpacker gogoprotoany.AnyUnpacker) error {
-	var pubKey cryptotypes.PubKey
-	return unpacker.UnpackAny(msg.NewPubkey, &pubKey)
-}
-
-// UnpackInterfaces implements UnpackInterfacesMessage.UnpackInterfaces
-func (hi ConsPubKeyRotationHistory) UnpackInterfaces(unpacker gogoprotoany.AnyUnpacker) error {
-	var oldPubKey cryptotypes.PubKey
-	err := unpacker.UnpackAny(hi.OldConsPubkey, &oldPubKey)
-	if err != nil {
-		return err
 	}
-	var newPubKey cryptotypes.PubKey
-	return unpacker.UnpackAny(hi.NewConsPubkey, &newPubKey)
 }

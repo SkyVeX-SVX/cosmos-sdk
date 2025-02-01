@@ -19,31 +19,55 @@ const (
 	// TODO: Justify our choice of default here.
 	DefaultUnbondingTime time.Duration = time.Hour * 24 * 7 * 3
 
-	// DefaultMaxValidators is the default maximum number of bonded validators.
+	// Default maximum number of bonded validators
 	DefaultMaxValidators uint32 = 100
 
-	// DefaultMaxEntries is the default maximum number of entries
-	// in a UBD (Unbonding Delegation) or RED (Redelegation) pair.
+	// Default maximum entries in a UBD/RED pair
 	DefaultMaxEntries uint32 = 7
+
+	// DefaultHistorical entries is 10000. Apps that don't use IBC can ignore this
+	// value by not adding the staking module to the application module manager's
+	// SetOrderBeginBlockers.
+	DefaultHistoricalEntries uint32 = 10000
 )
 
-// DefaultMinCommissionRate is set to 0%
-var DefaultMinCommissionRate = math.LegacyZeroDec()
+var (
+	// DefaultMinCommissionRate is set to 0%
+	DefaultMinCommissionRate = math.LegacyZeroDec()
+
+	// ValidatorBondFactor of -1 indicates that it's disabled
+	ValidatorBondCapDisabled = math.LegacyNewDecFromInt(math.NewInt(-1))
+
+	// DefaultValidatorBondFactor is set to -1 (disabled)
+	DefaultValidatorBondFactor = ValidatorBondCapDisabled
+	// DefaultGlobalLiquidStakingCap is set to 100%
+	DefaultGlobalLiquidStakingCap = math.LegacyOneDec()
+	// DefaultValidatorLiquidStakingCap is set to 100%
+	DefaultValidatorLiquidStakingCap = math.LegacyOneDec()
+)
 
 // NewParams creates a new Params instance
 func NewParams(unbondingTime time.Duration,
-	maxValidators, maxEntries uint32,
-	bondDenom string, minCommissionRate math.LegacyDec,
-	keyRotationFee sdk.Coin,
+	maxValidators,
+	maxEntries,
+	historicalEntries uint32,
+	bondDenom string,
+	minCommissionRate math.LegacyDec,
+	validatorBondFactor math.LegacyDec,
+	globalLiquidStakingCap math.LegacyDec,
+	validatorLiquidStakingCap math.LegacyDec,
 ) Params {
 	return Params{
 		UnbondingTime:     unbondingTime,
 		MaxValidators:     maxValidators,
 		MaxEntries:        maxEntries,
-		HistoricalEntries: 0,
-		BondDenom:         bondDenom,
-		MinCommissionRate: minCommissionRate,
-		KeyRotationFee:    keyRotationFee,
+		HistoricalEntries: historicalEntries,
+
+		BondDenom:                 bondDenom,
+		MinCommissionRate:         minCommissionRate,
+		ValidatorBondFactor:       validatorBondFactor,
+		GlobalLiquidStakingCap:    globalLiquidStakingCap,
+		ValidatorLiquidStakingCap: validatorLiquidStakingCap,
 	}
 }
 
@@ -53,13 +77,16 @@ func DefaultParams() Params {
 		DefaultUnbondingTime,
 		DefaultMaxValidators,
 		DefaultMaxEntries,
+		DefaultHistoricalEntries,
 		sdk.DefaultBondDenom,
 		DefaultMinCommissionRate,
-		sdk.NewInt64Coin(sdk.DefaultBondDenom, 1000000), // fees used to rotate the ConsPubkey or Operator key
+		DefaultValidatorBondFactor,
+		DefaultGlobalLiquidStakingCap,
+		DefaultValidatorLiquidStakingCap,
 	)
 }
 
-// MustUnmarshalParams unmarshal the current staking params value from store key or panic
+// unmarshal the current staking params value from store key or panic
 func MustUnmarshalParams(cdc *codec.LegacyAmino, value []byte) Params {
 	params, err := UnmarshalParams(cdc, value)
 	if err != nil {
@@ -69,7 +96,7 @@ func MustUnmarshalParams(cdc *codec.LegacyAmino, value []byte) Params {
 	return params
 }
 
-// UnmarshalParams unmarshal the current staking params value from store key
+// unmarshal the current staking params value from store key
 func UnmarshalParams(cdc *codec.LegacyAmino, value []byte) (params Params, err error) {
 	err = cdc.Unmarshal(value, &params)
 	if err != nil {
@@ -79,7 +106,7 @@ func UnmarshalParams(cdc *codec.LegacyAmino, value []byte) (params Params, err e
 	return
 }
 
-// Validate validates a set of params
+// validate a set of params
 func (p Params) Validate() error {
 	if err := validateUnbondingTime(p.UnbondingTime); err != nil {
 		return err
@@ -105,7 +132,15 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	if err := validateKeyRotationFee(p.BondDenom, p.KeyRotationFee); err != nil {
+	if err := validateValidatorBondFactor(p.ValidatorBondFactor); err != nil {
+		return err
+	}
+
+	if err := validateGlobalLiquidStakingCap(p.GlobalLiquidStakingCap); err != nil {
+		return err
+	}
+
+	if err := validateValidatorLiquidStakingCap(p.ValidatorLiquidStakingCap); err != nil {
 		return err
 	}
 
@@ -118,8 +153,8 @@ func validateUnbondingTime(i interface{}) error {
 		return fmt.Errorf("invalid parameter type: %T", i)
 	}
 
-	if v < 0 {
-		return fmt.Errorf("unbonding time must not be negative: %d", v)
+	if v <= 0 {
+		return fmt.Errorf("unbonding time must be positive: %d", v)
 	}
 
 	return nil
@@ -177,7 +212,6 @@ func validateBondDenom(i interface{}) error {
 	return nil
 }
 
-// ValidatePowerReduction validates the PowerReduction parameter.
 func ValidatePowerReduction(i interface{}) error {
 	v, ok := i.(math.Int)
 	if !ok {
@@ -185,7 +219,7 @@ func ValidatePowerReduction(i interface{}) error {
 	}
 
 	if v.LT(math.NewInt(1)) {
-		return errors.New("power reduction cannot be lower than 1")
+		return fmt.Errorf("power reduction cannot be lower than 1")
 	}
 
 	return nil
@@ -210,13 +244,46 @@ func validateMinCommissionRate(i interface{}) error {
 	return nil
 }
 
-func validateKeyRotationFee(bondDenom string, coin sdk.Coin) error {
-	if coin.IsNil() {
-		return fmt.Errorf("cons pubkey rotation fee cannot be nil: %s", coin)
+func validateValidatorBondFactor(i interface{}) error {
+	v, ok := i.(math.LegacyDec)
+	if !ok {
+		return fmt.Errorf("invalid parameter type: %T", i)
 	}
 
-	if coin.IsLTE(sdk.NewInt64Coin(bondDenom, 0)) {
-		return fmt.Errorf("cons pubkey rotation fee cannot be negative or zero: %s", coin)
+	if v.IsNegative() && !v.Equal(math.LegacyNewDec(-1)) {
+		return fmt.Errorf("invalid validator bond factor: %s", v)
+	}
+
+	return nil
+}
+
+func validateGlobalLiquidStakingCap(i interface{}) error {
+	v, ok := i.(math.LegacyDec)
+	if !ok {
+		return fmt.Errorf("invalid parameter type: %T", i)
+	}
+
+	if v.IsNegative() {
+		return fmt.Errorf("global liquid staking cap cannot be negative: %s", v)
+	}
+	if v.GT(math.LegacyOneDec()) {
+		return fmt.Errorf("global liquid staking cap cannot be greater than 100%%: %s", v)
+	}
+
+	return nil
+}
+
+func validateValidatorLiquidStakingCap(i interface{}) error {
+	v, ok := i.(math.LegacyDec)
+	if !ok {
+		return fmt.Errorf("invalid parameter type: %T", i)
+	}
+
+	if v.IsNegative() {
+		return fmt.Errorf("validator liquid staking cap cannot be negative: %s", v)
+	}
+	if v.GT(math.LegacyOneDec()) {
+		return fmt.Errorf("validator liquid staking cap cannot be greater than 100%%: %s", v)
 	}
 
 	return nil
